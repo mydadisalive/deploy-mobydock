@@ -1,7 +1,7 @@
 #!/bin/bash
 
 APP_ENV="${APP_ENV:-staging}"
-SERVER_IP="${SERVER_IP:-10.0.0.15}"
+SERVER_IP="${SERVER_IP:-10.0.0.102}"
 SSH_USER="${SSH_USER:-$(whoami)}"
 KEY_USER="${KEY_USER:-$(whoami)}"
 DOCKER_VERSION="${DOCKER_VERSION:-1.8.3}"
@@ -15,25 +15,12 @@ function preseed_staging()
 cat << EOF
 STAGING SERVER (DIRECT VIRTUAL MACHINE) DIRECTIONS:
   1. Configure a static IP address directly on the VM
-     su
-     <enter password>
-     nano /etc/network/interfaces
-     [change the last line to look like this, remember to set the correct
-     gateway for your router's IP address if it's not 10.0.2.2]
-iface eth0 inet static
-  address ${SERVER_IP}    
-  netmask 255.255.255.0
-  gateway 10.0.2.2
+     edit the /etc/netplan/01-network-manager-all.yaml
 
-  2. Reboot the VM and ensure the Debian CD is mounted
-
-  3. Install sudo
-     apt-get upate && apt-get install -y -q sudo
-
-  4. Add the user to the sudo group
+  2. Add the user to the sudo group
      adduser ${SSH_USER} sudo
 
-  5. Run the commands in: $0 --help
+  3. Run the commands in: $0 --help
      Example:
        ./deploy.sh -a
 EOF
@@ -127,6 +114,13 @@ sudo chmod +x /var/git/mobydock.git/hooks/post-receive /var/git/nginx.git/hooks/
 sudo chown ${SSH_USER}:${SSH_USER} -R /var/git/mobydock.git /var/git/mobydock /var/git/nginx.git /var/git/nginx
 	'"
 	echo "done!"
+}
+
+function upload_image()
+{
+	image_id=`docker images  | grep mobydock | head -1 | awk '{ print $3 }'`
+	docker tag ${image_id} mydadisalive/mobydock:latest
+	docker push mydadisalive/mobydock:latest
 }
 
 function configure_firewall()
@@ -232,6 +226,8 @@ function provision_server()
 	echo "---"
 	git_init
 	echo "---"
+	upload_image
+	echo "---"
 	configure_firewall
 	echo "---"
 	copy_units
@@ -246,7 +242,7 @@ function provision_server()
 function help_menu ()
 {
 cat << EOF
-Usage: ${0} (-h | -S | -u | -k | -s | -d [docker_ver] | -l | -g | -f | -c | -b | -e | -x | -r | -a [docker_ver])
+Usage: ${0} (-h | -S | -u | -k | -s | -d [docker_ver] | -l | -g | --upload-image | -f | -c | -b | -e | -x | -r | -a [docker_ver])
 
 ENVIRONMENT VARIABLES:
   SERVER_IP			IP address to work on, ie. staging or production
@@ -270,6 +266,7 @@ ENVIRONMENT VARIABLES:
   	-d|--docker 			Install Docker
   	-l|--docker-pull		Pull necassary Docker images
   	-g|--git-init			Install and initialize git
+	--upload-image			Uploads image to dockerhub
   	-f|--firewall			Configure the iptables firewall
   	-c|--copy-units			Copy systemd unit files
   	-b|--enable-base-units	Enable base systemd unit files
@@ -355,6 +352,10 @@ case "${1}" in
 	;;
 	-g|--git-init)
 	git_init
+	shift
+	;;
+	--upload-image)
+	upload_image
 	shift
 	;;
 	-f|--firewall)
